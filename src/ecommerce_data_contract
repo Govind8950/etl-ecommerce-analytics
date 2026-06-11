@@ -1,0 +1,281 @@
+# DATA CONTRACT
+## ETL E-Commerce Analytics — Databricks Data Warehouse
+
+---
+
+| Field            | Details                                                                 |
+|------------------|-------------------------------------------------------------------------|
+| Contract ID      | DC-ECOM-001                                                             |
+| Version          | v1.0.0                                                                  |
+| Status           | Active                                                                  |
+| Created Date     | June 2026                                                               |
+| Review Date      | December 2026                                                           |
+| Classification   | Confidential                                                            |
+| GitHub Repo      | https://github.com/Govind8950/etl-ecommerce-analytics                  |
+
+---
+
+## 1. DATA PRODUCT OVERVIEW
+
+| Field                | Details                                                                 |
+|----------------------|-------------------------------------------------------------------------|
+| Data Product Name    | ecommerce_sales_analytics                                               |
+| Domain               | E-Commerce / Sales & Revenue                                            |
+| Organisation         | Quantix IT                                                              |
+| Description          | End-to-end ETL pipeline for e-commerce sales data processed through Bronze → Silver → Gold Medallion Architecture on Databricks. Delivers analytics-ready Star Schema for business reporting and KPI tracking. |
+| Pipeline              | GitHub CSV Source → Bronze (Raw) → Silver (Clean) → Gold (Star Schema) → BI Reporting |
+| Target Ready Date    | 15 June 2026                                                            |
+
+---
+
+## 2. OWNERSHIP
+
+| Role                | Name / Team              | Responsibility                                              |
+|---------------------|--------------------------|-------------------------------------------------------------|
+| Technical Owner     | Govind — Quantix IT      | Builds, maintains, and monitors the ETL pipeline            |
+| Business Owner      | Quantix IT — Management  | Defines KPIs, business metrics, and data requirements       |
+| Data Steward        | Quantix IT — Data Team   | Ensures quality, compliance, and data consistency           |
+| On-Call Contact     | Govind — Quantix IT      | Primary contact for pipeline incidents and breaches         |
+| Escalation Contact  | Quantix IT — Head of Data| Escalation if breach unresolved within 2 hours             |
+
+---
+
+## 3. SOURCE SYSTEM
+
+| Field               | Details                                                                 |
+|---------------------|-------------------------------------------------------------------------|
+| Source Platform     | GitHub — etl-ecommerce-analytics repository                             |
+| Source URL          | https://github.com/Govind8950/etl-ecommerce-analytics                  |
+| Source Format       | Flat CSV files                                                          |
+| Source Tables       | customers, sales, sales_orders                                          |
+| Ingestion Tool      | Databricks — Auto Loader / Batch Ingestion                              |
+| Storage Location    | Databricks File System (DBFS) — /raw/ecommerce/                        |
+| Ingestion Method    | Daily batch                                                             |
+| Frequency           | Once daily                                                              |
+
+---
+
+## 4. SCHEMA DEFINITION
+
+### 4.1 Fact Table — fact_order_item
+
+> **Grain:** 1 row per product per order (one line item per receipt)
+
+| Column         | Data Type      | Nullable   | Key        | Description                        |
+|----------------|----------------|------------|------------|------------------------------------|
+| order_id       | VARCHAR(45)    | NOT NULL   | PK         | Unique order line identifier       |
+| customer_id    | BIGINT(8)      | NOT NULL   | FK         | FK → dim_customer.customer_id      |
+| product_id     | VARCHAR(45)    | NOT NULL   | FK         | FK → dim_product.product_id        |
+| promo_id       | VARCHAR(45)    | NULLABLE   | FK         | FK → dim_promotion.promo_id        |
+| order_date_key | BIGINT(8)      | NOT NULL   | FK         | FK → dim_date.order_date_key       |
+| quantity       | INT            | NOT NULL   | —          | Quantity of items ordered          |
+| price          | DECIMAL(10,2)  | NOT NULL   | —          | Unit price in GBP                  |
+| amount         | DECIMAL(10,2)  | NOT NULL   | —          | Total amount = quantity × price    |
+
+### 4.2 Dimension Table — dim_customer
+
+| Column         | Data Type      | Nullable   | Key        | Description                        |
+|----------------|----------------|------------|------------|------------------------------------|
+| customer_id    | BIGINT(8)      | NOT NULL   | PK         | Unique customer identifier         |
+| customer_name  | VARCHAR(100)   | NOT NULL   | —          | Full customer name (SENSITIVE)     |
+| email          | VARCHAR(100)   | NULLABLE   | —          | Customer email (SENSITIVE)         |
+| region         | VARCHAR(50)    | NULLABLE   | —          | Customer region                    |
+| segment        | VARCHAR(50)    | NULLABLE   | —          | Customer segment / type            |
+
+### 4.3 Dimension Table — dim_product
+
+| Column         | Data Type      | Nullable   | Key        | Description                        |
+|----------------|----------------|------------|------------|------------------------------------|
+| product_id     | VARCHAR(45)    | NOT NULL   | PK         | Unique product identifier          |
+| product_name   | VARCHAR(45)    | NOT NULL   | —          | Product name                       |
+| category       | VARCHAR(50)    | NULLABLE   | —          | Product category                   |
+| sub_category   | VARCHAR(50)    | NULLABLE   | —          | Product sub-category               |
+| price          | DECIMAL(10,2)  | NULLABLE   | —          | Standard product price in GBP      |
+
+### 4.4 Dimension Table — dim_date
+
+| Column         | Data Type      | Nullable   | Key        | Description                        |
+|----------------|----------------|------------|------------|------------------------------------|
+| order_date_key | BIGINT(8)      | NOT NULL   | PK         | Date key in YYYYMMDD format        |
+| full_date      | DATE           | NOT NULL   | —          | Full calendar date                 |
+| day_num        | INT            | NOT NULL   | —          | Day of month                       |
+| month_num      | INT            | NOT NULL   | —          | Month number (1–12)                |
+| year_num       | INT            | NOT NULL   | —          | Calendar year                      |
+| quarter_num    | INT            | NOT NULL   | —          | Quarter (1–4)                      |
+| month_name     | VARCHAR(20)    | NULLABLE   | —          | Month name (January etc)           |
+| is_weekend     | TINYINT(1)     | NULLABLE   | —          | 1 = Weekend, 0 = Weekday           |
+
+### 4.5 Dimension Table — dim_promotion
+
+| Column         | Data Type      | Nullable   | Key        | Description                        |
+|----------------|----------------|------------|------------|------------------------------------|
+| promo_id       | VARCHAR(45)    | NOT NULL   | PK         | Unique promotion identifier        |
+| promo_discount | DECIMAL        | NULLABLE   | —          | Discount percentage applied        |
+| promo_quantity | INT            | NULLABLE   | —          | Qualifying quantity for promotion  |
+| promo_item     | VARCHAR(45)    | NULLABLE   | —          | Item the promotion applies to      |
+| start_date     | DATE           | NULLABLE   | —          | Promotion start date               |
+| end_date       | DATE           | NULLABLE   | —          | Promotion end date                 |
+
+---
+
+## 5. DATA QUALITY RULES
+
+| Rule ID | Table            | Field          | Rule                          | Threshold | Action on Breach     |
+|---------|------------------|----------------|-------------------------------|-----------|----------------------|
+| DQ-001  | fact_order_item  | order_id       | NOT NULL + UNIQUE             | 100%      | Pipeline fails       |
+| DQ-002  | fact_order_item  | customer_id    | NOT NULL                      | 100%      | Pipeline fails       |
+| DQ-003  | fact_order_item  | product_id     | NOT NULL                      | 100%      | Pipeline fails       |
+| DQ-004  | fact_order_item  | order_date_key | NOT NULL                      | 100%      | Pipeline fails       |
+| DQ-005  | fact_order_item  | quantity       | quantity > 0                  | 100%      | Pipeline fails       |
+| DQ-006  | fact_order_item  | price          | price >= 0                    | 100%      | Pipeline fails       |
+| DQ-007  | fact_order_item  | amount         | amount = quantity × price     | 100%      | Pipeline fails       |
+| DQ-008  | fact_order_item  | customer_id    | Must exist in dim_customer    | 100%      | Pipeline fails       |
+| DQ-009  | fact_order_item  | product_id     | Must exist in dim_product     | 100%      | Pipeline fails       |
+| DQ-010  | fact_order_item  | order_date_key | Must exist in dim_date        | 100%      | Pipeline fails       |
+| DQ-011  | fact_order_item  | Row count      | Minimum 100 rows per day      | 100%      | Alert fires          |
+| DQ-012  | dim_customer     | customer_id    | NOT NULL + UNIQUE             | 100%      | Pipeline fails       |
+| DQ-013  | dim_product      | product_id     | NOT NULL + UNIQUE             | 100%      | Pipeline fails       |
+
+> Rule: If any DQ-001 to DQ-010 fails → pipeline halts immediately.
+> No silent bad data. No partial loads. Ever.
+
+---
+
+## 6. SLA — SERVICE LEVEL AGREEMENT
+
+| Field                    | Details                                      |
+|--------------------------|----------------------------------------------|
+| Pipeline Start Time      | 02:00 UTC daily                              |
+| Bronze Ready By          | 02:30 UTC daily                              |
+| Silver Ready By          | 03:00 UTC daily                              |
+| Gold Ready By (SLA)      | 04:00 UTC daily                              |
+| Target Live Date         | 15 June 2026                                 |
+| Max Acceptable Delay     | 30 minutes beyond Gold SLA                   |
+| Latency Type             | T+1 (next day batch)                         |
+| Notification on Breach   | Yes — Slack alert + email to Govind          |
+| RCA Required             | Yes — within 24 hours of breach              |
+
+### SLA Monitoring Thresholds
+
+| Check                  | Expected         | Alert Threshold          |
+|------------------------|------------------|--------------------------|
+| Pipeline start time    | 02:00 UTC        | Later than 02:15 UTC     |
+| Bronze data ready      | 02:30 UTC        | Later than 02:45 UTC     |
+| Silver data ready      | 03:00 UTC        | Later than 03:15 UTC     |
+| Gold data ready        | 04:00 UTC        | Later than 04:30 UTC     |
+| Daily row count        | ≥ 100 rows       | Less than 100 rows       |
+| DQ pass rate           | 100%             | Any rule fails           |
+
+---
+
+## 7. MEDALLION ARCHITECTURE LAYERS
+
+| Layer      | DBFS Path                  | Purpose                                      | Write Mode  |
+|------------|----------------------------|----------------------------------------------|-------------|
+| Bronze     | /bronze/ecommerce/         | Raw CSV data as-is. Never modified.          | APPEND      |
+| Silver     | /silver/ecommerce/         | Cleaned, typed, deduplicated, validated      | OVERWRITE   |
+| Gold       | /gold/ecommerce/           | Star Schema — analytics ready                | OVERWRITE   |
+
+### Contract Validation Per Layer
+
+**Bronze Layer:**
+- Schema matches source CSV format
+- Ingestion timestamp recorded on every row
+- Source file name recorded on every row
+- No completely empty files accepted
+- Raw data preserved exactly as received
+
+**Silver Layer:**
+- All DQ rules DQ-001 to DQ-013 applied
+- Null checks on all NOT NULL fields
+- Duplicate order_ids removed
+- amount = quantity × price verified
+- All FK references validated against dimensions
+- Data types cast and enforced
+
+**Gold Layer:**
+- Star Schema fully built and validated
+- Row counts reconcile with Silver layer
+- All aggregations verified
+- Data available by 04:00 UTC SLA
+- Ready for BI consumption
+
+---
+
+## 8. SECURITY & DATA CLASSIFICATION
+
+| Field          | Classification    | Access              | Masking              |
+|----------------|-------------------|---------------------|----------------------|
+| customer_name  | Sensitive         | Restricted only     | Masked for analysts  |
+| email          | Sensitive         | Restricted only     | Masked for analysts  |
+| customer_id    | Internal          | Data team + analysts| No masking           |
+| sales data     | Confidential      | Named roles only    | No masking           |
+| product data   | Internal          | All data roles      | No masking           |
+
+### Access Control
+
+| Role              | Layer Access              | Permissions       |
+|-------------------|---------------------------|-------------------|
+| Govind (DE)       | Bronze + Silver + Gold    | Full read/write   |
+| Business Analysts | Gold only                 | Read only         |
+| Management        | Gold only                 | Read only         |
+
+### Encryption
+
+| Type                    | Status         |
+|-------------------------|----------------|
+| Encryption at rest      | Enabled        |
+| Encryption in transit   | HTTPS enforced |
+
+---
+
+## 9. VERSIONING & CHANGE MANAGEMENT
+
+| Change Type      | Notice Required  | Version Bump        | Example                    |
+|------------------|------------------|---------------------|----------------------------|
+| Breaking change  | 14 days minimum  | v1.0.0 → v2.0.0    | Remove or rename a column  |
+| Non-breaking     | 48 hours         | v1.0.0 → v1.1.0    | Add a new column           |
+| Bug fix          | 24 hours         | v1.0.0 → v1.0.1    | Fix a data quality rule    |
+
+> All changes must be documented in changelog below.
+> No undocumented changes to production pipeline.
+
+---
+
+## 10. BREACH PROCESS
+
+| Step | Action                                      | Owner          | Timeline        |
+|------|---------------------------------------------|----------------|-----------------|
+| 1    | Pipeline halts automatically                | Automated      | Immediate       |
+| 2    | Slack / email alert fires                   | Automated      | Immediate       |
+| 3    | Downstream consumers notified               | Govind         | Within 15 mins  |
+| 4    | Root Cause Analysis begins                  | Govind         | Within 1 hour   |
+| 5    | RCA documented and shared                   | Govind         | Within 24 hours |
+| 6    | Contract reviewed if needed                 | All owners     | Within 1 week   |
+
+---
+
+## 11. SIGN-OFF
+
+| Role             | Name              | Organisation  | Sign-off Date |
+|------------------|-------------------|---------------|---------------|
+| Technical Owner  | Govind            | Quantix IT    |               |
+| Business Owner   |                   | Quantix IT    |               |
+| Data Steward     |                   | Quantix IT    |               |
+
+---
+
+## 12. CHANGELOG
+
+| Version | Date      | Change                          | Author  |
+|---------|-----------|---------------------------------|---------|
+| v1.0.0  | June 2026 | Initial Data Contract created   | Govind  |
+
+---
+
+*This Data Contract is version controlled in Git.*
+*Repository: https://github.com/Govind8950/etl-ecommerce-analytics*
+*Target Live Date: 15 June 2026*
+*Review Date: December 2026*
+*Contract ID: DC-ECOM-001*
+*Organisation: Quantix IT*
